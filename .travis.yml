@@ -3,9 +3,8 @@ dist: xenial
 python:
   - "3.7"
 before_install:
-  - pip install pylint
-before_script:
   - cd bin
+  - pip install pylint
 # Install dependencies
 install:
   - pip install -r requirements.txt

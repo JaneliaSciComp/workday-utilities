@@ -41,17 +41,16 @@ def call_responder(server, endpoint):
     except requests.exceptions.RequestException as err:
         logger.critical(err)
         sys.exit(-1)
-    if req.status_code == 200:
-        return req.json()
-    else:
+    if req.status_code != 200:
         logger.error('Status: %s', str(req.status_code))
         sys.exit(-1)
+    return req.json()
 
 
 def initialize_program():
     """ Get REST configuration
     """
-    global CONFIG, SUFFIX_SCORE
+    global CONFIG
     data = call_responder('config', 'config/rest_services')
     CONFIG = data['config']
 
@@ -64,8 +63,8 @@ def post_change(ddict, userid='', configuration='workday'):
     endpoint = 'importjson/' + configuration + suffix
     resp = requests.post(CONFIG['config']['url'] + endpoint,
                          {"config": json.dumps(ddict)})
-    if resp.status_code != requests.codes.ok:
-            logger.error(resp.json()['rest']['message'])
+    if resp.status_code != 200:
+        logger.error(resp.json()['rest']['message'])
     else:
         rest = resp.json()
         if 'inserted' in rest['rest']:
@@ -76,9 +75,9 @@ def post_change(ddict, userid='', configuration='workday'):
 
 def update_users(rebuild):
     known = call_responder('config', 'config/workday')
-    logger.info("Found %d entries in configuration" % len(known['config']))
+    logger.info("Found %d entries in configuration", len(known['config']))
     workday = call_responder('hhmi-services', 'IT/WD-hcm/wdworkerdetails')
-    logger.info("Found %d entries in Workday" % len(workday))
+    logger.info("Found %d entries in Workday", len(workday))
     ddict = dict()
     userdict = dict()
     userlist = []
@@ -87,7 +86,7 @@ def update_users(rebuild):
         user = dict()
         userid = r["WORKERUSERID"].lower()
         if userid not in known['config']:
-            logger.info("%s is a new user" % (userid))
+            logger.info("%s is a new user", (userid))
         user['manager_userid'] = r['MANAGERUSERID'].lower()
         for key, val in translate.items():
             user[val] = r[key]
@@ -98,14 +97,14 @@ def update_users(rebuild):
         userdict = {'userid': userid}
         userdict.update(user)
         userlist.append(userdict)
-    logger.info("Found %d active entries" % len(ddict))
+    logger.info("Found %d active entries", len(ddict))
     #for ku in known['config']:
     #    if ku not in ddict:
     #        logger.warning("%s is no longer in Workday" % (ku))
     #        ddict[ku] = known['config'][ku]
     #post_change(userlist, '', 'workday_list')
     if rebuild:
-        logger.info("workday config will contain %d Janelia entries" % (len(ddict)))
+        logger.info("workday config will contain %d Janelia entries", len(ddict))
         post_change(ddict)
 
 

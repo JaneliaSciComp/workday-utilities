@@ -18,11 +18,10 @@ def call_responder(server, endpoint):
     except requests.exceptions.RequestException as err:
         logger.critical(err)
         sys.exit(-1)
-    if req.status_code == 200:
-        return req.json()
-    else:
+    if req.status_code != 200:
         logger.error('Status: %s', str(req.status_code))
         sys.exit(-1)
+    return req.json()
 
 
 def post_change(ddict, userid='', configuration='cost_centers'):
@@ -34,7 +33,7 @@ def post_change(ddict, userid='', configuration='cost_centers'):
     resp = requests.post(CONFIG['config']['url'] + endpoint,
                          {"config": json.dumps(ddict),
                           "definition": "Cost centers"})
-    if resp.status_code != requests.codes.ok:
+    if resp.status_code != 200:
             logger.error(resp.json()['rest']['message'])
     else:
         rest = resp.json()

@@ -7,5 +7,5 @@
 [![Requirements Status](https://requires.io/github/JaneliaSciComp/workday-utilities/requirements.svg?branch=master)](https://requires.io/github/JaneliaSciComp/workday-utilities/requirements/?branch=master)
 
 ## Summary
-Utilities to extract data from Workday using the API and storing it local in the
+Utilities to extract data from Workday using the API and storing it locally in the
 Config system.

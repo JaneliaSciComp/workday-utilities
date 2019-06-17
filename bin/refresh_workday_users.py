@@ -73,16 +73,14 @@ def post_change(ddict, userid='', configuration='workday'):
             count['update'] += rest['rest']['updated']
 
 
-def update_users(rebuild):
+def update_users(quick, rebuild):
     known = call_responder('config', 'config/workday')
     logger.info("Found %d entries in configuration", len(known['config']))
     workday = call_responder('hhmi-services', 'IT/WD-hcm/wdworkerdetails')
     logger.info("Found %d entries in Workday", len(workday))
     ddict = dict()
-    userdict = dict()
-    userlist = []
-    for r in workday:
-        #if r['LOCATIONCODE'] == 'Janelia_site':
+    sorted_workday = sorted(workday, key=lambda k: k['WORKERUSERID'])
+    for r in sorted_workday:
         user = dict()
         userid = r["WORKERUSERID"].lower()
         if userid not in known['config']:
@@ -91,18 +89,12 @@ def update_users(rebuild):
         for key, val in translate.items():
             user[val] = r[key]
         ddict[userid] = user
+        if quick and userid in known['config']:
+            continue
         logger.debug(user)
         if not rebuild:
             post_change(user, userid)
-        userdict = {'userid': userid}
-        userdict.update(user)
-        userlist.append(userdict)
     logger.info("Found %d active entries", len(ddict))
-    #for ku in known['config']:
-    #    if ku not in ddict:
-    #        logger.warning("%s is no longer in Workday" % (ku))
-    #        ddict[ku] = known['config'][ku]
-    #post_change(userlist, '', 'workday_list')
     if rebuild:
         logger.info("workday config will contain %d Janelia entries", len(ddict))
         post_change(ddict)
@@ -114,6 +106,8 @@ def update_users(rebuild):
 if __name__ == '__main__':
     PARSER = argparse.ArgumentParser(
         description='Update Workday user Configuration')
+    PARSER.add_argument('--quick', action='store_true', dest='QUICK',
+                        default=False, help='Only process new entries')
     PARSER.add_argument('--rebuild', action='store_true', dest='REBUILD',
                         default=False, help='Rebuild config from scratch')
     PARSER.add_argument('--verbose', action='store_true', dest='VERBOSE',
@@ -134,6 +128,6 @@ if __name__ == '__main__':
     logger.addHandler(HANDLER)
 
 initialize_program()
-update_users(ARG.REBUILD)
+update_users(ARG.QUICK, ARG.REBUILD)
 print("Documents inserted in config database: %d" % count['insert'])
 print("Documents updated in config database: %d" % count['update'])

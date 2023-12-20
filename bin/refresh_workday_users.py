@@ -39,10 +39,10 @@ def call_responder(server, endpoint):
     try:
         req = requests.get(url)
     except requests.exceptions.RequestException as err:
-        logger.critical(err)
+        LOGGER.critical(err)
         sys.exit(-1)
     if req.status_code != 200:
-        logger.error('Status: %s', str(req.status_code))
+        LOGGER.error('Status: %s', str(req.status_code))
         sys.exit(-1)
     return req.json()
 
@@ -64,7 +64,7 @@ def post_change(ddict, userid='', configuration='workday'):
     resp = requests.post(CONFIG['config']['url'] + endpoint,
                          {"config": json.dumps(ddict)})
     if resp.status_code != 200:
-        logger.error(resp.json()['rest']['message'])
+        LOGGER.error(resp.json()['rest']['message'])
     else:
         rest = resp.json()
         if 'inserted' in rest['rest']:
@@ -75,28 +75,28 @@ def post_change(ddict, userid='', configuration='workday'):
 
 def update_users(quick, rebuild):
     known = call_responder('config', 'config/workday')
-    logger.info("Found %d entries in configuration", len(known['config']))
+    LOGGER.info("Found %d entries in configuration", len(known['config']))
     workday = call_responder('hhmi-services', 'IT/WD-hcm/wdworkerdetails')
-    logger.info("Found %d entries in Workday", len(workday))
+    LOGGER.info("Found %d entries in Workday", len(workday))
     ddict = dict()
     sorted_workday = sorted(workday, key=lambda k: k['WORKERUSERID'])
     for r in sorted_workday:
         user = dict()
         userid = r["WORKERUSERID"].lower()
         if userid not in known['config']:
-            logger.info("%s is a new user", (userid))
+            LOGGER.info("%s is a new user", (userid))
         user['manager_userid'] = r['MANAGERUSERID'].lower()
         for key, val in translate.items():
             user[val] = r[key]
         ddict[userid] = user
         if quick and userid in known['config']:
             continue
-        logger.debug(user)
+        LOGGER.debug(user)
         if not rebuild:
             post_change(user, userid)
-    logger.info("Found %d active entries", len(ddict))
+    LOGGER.info("Found %d active entries", len(ddict))
     if rebuild:
-        logger.info("workday config will contain %d Janelia entries", len(ddict))
+        LOGGER.info("workday config will contain %d Janelia entries", len(ddict))
         post_change(ddict)
 
 
@@ -116,18 +116,20 @@ if __name__ == '__main__':
                         default=False, help='Turn on debug output')
     ARG = PARSER.parse_args()
 
-    logger = colorlog.getLogger()
+    LOGGER = colorlog.getLogger()
+    ATTR = colorlog.colorlog.logging if "colorlog" in dir(colorlog) else colorlog
     if ARG.DEBUG:
-        logger.setLevel(colorlog.colorlog.logging.DEBUG)
+        LOGGER.setLevel(ATTR.DEBUG)
     elif ARG.VERBOSE:
-        logger.setLevel(colorlog.colorlog.logging.INFO)
+        LOGGER.setLevel(ATTR.INFO)
     else:
-        logger.setLevel(colorlog.colorlog.logging.WARNING)
+        LOGGER.setLevel(ATTR.WARNING)
     HANDLER = colorlog.StreamHandler()
     HANDLER.setFormatter(colorlog.ColoredFormatter())
-    logger.addHandler(HANDLER)
+    LOGGER.addHandler(HANDLER)
 
-initialize_program()
-update_users(ARG.QUICK, ARG.REBUILD)
-print("Documents inserted in config database: %d" % count['insert'])
-print("Documents updated in config database: %d" % count['update'])
+    initialize_program()
+    update_users(ARG.QUICK, ARG.REBUILD)
+    print("Documents inserted in config database: %d" % count['insert'])
+    print("Documents updated in config database: %d" % count['update'])
+

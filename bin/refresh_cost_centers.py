@@ -16,10 +16,10 @@ def call_responder(server, endpoint):
     try:
         req = requests.get(url)
     except requests.exceptions.RequestException as err:
-        logger.critical(err)
+        LOGGER.critical(err)
         sys.exit(-1)
     if req.status_code != 200:
-        logger.error('Status: %s', str(req.status_code))
+        LOGGER.error('Status: %s', str(req.status_code))
         sys.exit(-1)
     return req.json()
 
@@ -34,7 +34,7 @@ def post_change(ddict, userid='', configuration='cost_centers'):
                          {"config": json.dumps(ddict),
                           "definition": "Cost centers"})
     if resp.status_code != 200:
-            logger.error(resp.json()['rest']['message'])
+            LOGGER.error(resp.json()['rest']['message'])
     else:
         rest = resp.json()
         if 'inserted' in rest['rest']:
@@ -45,19 +45,19 @@ def post_change(ddict, userid='', configuration='cost_centers'):
 
 def update_cost_centers(rebuild):
     known = call_responder('config', 'config/cost_centers')
-    logger.info("Found %d entries in existing configuration" % len(known['config']))
+    LOGGER.info("Found %d entries in existing configuration" % len(known['config']))
     data = call_responder('hhmi-services', 'IT/WD-hcm/locations')
-    logger.info("Found %d locations" % len(data['data']))
+    LOGGER.info("Found %d locations" % len(data['data']))
     location = dict()
     for loc in data['data']:
         location[loc['LocationCode']] = loc
-    logger.info("Saved %d locations" % len(location))
+    LOGGER.info("Saved %d locations" % len(location))
     data = call_responder('hhmi-services', 'IT/WD-fin/lookups/costcenters')
-    logger.info("Found %d cost centers" % len(data['data']))
+    LOGGER.info("Found %d cost centers" % len(data['data']))
     ccdict = dict()
     for cc in data['data']:
         if cc['DefaultLocationID'] not in location:
-            logger.error("Could not find %s in saveld locations", cc['DefaultLocationID'])
+            LOGGER.error("Could not find %s in saveld locations", cc['DefaultLocationID'])
             continue
         loc = location[cc['DefaultLocationID']]
         ccdict[cc['CostCenter']] = {"organization": cc['CCDescr'],
@@ -69,10 +69,10 @@ def update_cost_centers(rebuild):
                                     "zip": loc['PostalCode'],
                                     "country": loc['Country']
                                    }
-        logger.debug(ccdict[cc['CostCenter']])
+        LOGGER.debug(ccdict[cc['CostCenter']])
         if 'PrimaryAddressLine2' in loc:
             ccdict[cc['CostCenter']]['address2'] = loc['PrimaryAddressLine2']
-    logger.info("Updated %d cost centers" % len(ccdict))
+    LOGGER.info("Updated %d cost centers" % len(ccdict))
     post_change(ccdict)
 
 
@@ -90,18 +90,20 @@ if __name__ == '__main__':
                         default=False, help='Turn on debug output')
     ARG = PARSER.parse_args()
 
-    logger = colorlog.getLogger()
+    LOGGER = colorlog.getLogger()
+    ATTR = colorlog.colorlog.logging if "colorlog" in dir(colorlog) else colorlog
     if ARG.DEBUG:
-        logger.setLevel(colorlog.colorlog.logging.DEBUG)
+        LOGGER.setLevel(ATTR.DEBUG)
     elif ARG.VERBOSE:
-        logger.setLevel(colorlog.colorlog.logging.INFO)
+        LOGGER.setLevel(ATTR.INFO)
     else:
-        logger.setLevel(colorlog.colorlog.logging.WARNING)
+        LOGGER.setLevel(ATTR.WARNING)
     HANDLER = colorlog.StreamHandler()
     HANDLER.setFormatter(colorlog.ColoredFormatter())
-    logger.addHandler(HANDLER)
+    LOGGER.addHandler(HANDLER)
 
-CONFIG = call_responder('config', 'config/rest_services')['config']
-update_cost_centers(ARG.REBUILD)
-print("Documents inserted in config database: %d" % count['insert'])
-print("Documents updated in config database: %d" % count['update'])
+    CONFIG = call_responder('config', 'config/rest_services')['config']
+    update_cost_centers(ARG.REBUILD)
+    print("Documents inserted in config database: %d" % count['insert'])
+    print("Documents updated in config database: %d" % count['update'])
+

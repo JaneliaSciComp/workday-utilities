@@ -4,6 +4,7 @@ import json
 import sys
 import colorlog
 import requests
+from tqdm import tqdm
 
 # Configuration
 CONFIG = {'config': {'url': 'http://config.int.janelia.org/'}}
@@ -73,30 +74,46 @@ def post_change(ddict, userid='', configuration='workday'):
             count['update'] += rest['rest']['updated']
 
 
-def update_users(quick, rebuild):
+def update_users():
     known = call_responder('config', 'config/workday')
-    LOGGER.info("Found %d entries in configuration", len(known['config']))
+    LOGGER.info(f"Found {len(known['config']):,} entries in configuration")
     workday = call_responder('hhmi-services', 'IT/WD-hcm/wdworkerdetails')
-    LOGGER.info("Found %d entries in Workday", len(workday))
+    LOGGER.info(f"Found {len(workday):,} entries in Workday")
     ddict = dict()
     sorted_workday = sorted(workday, key=lambda k: k['WORKERUSERID'])
-    for r in sorted_workday:
+    in_workday = {}
+    for r in tqdm(sorted_workday):
         user = dict()
         userid = r["WORKERUSERID"].lower()
+        in_workday[userid] = True
         if userid not in known['config']:
             LOGGER.info("%s is a new user", (userid))
         user['manager_userid'] = r['MANAGERUSERID'].lower()
+        missing = False
         for key, val in translate.items():
+            if key not in r:
+                LOGGER.error(f"Missing {key}")
+                print(json.dumps(r, indent=2))
+                missing = True
+                break
             user[val] = r[key]
+        if missing:
+            continue
         ddict[userid] = user
-        if quick and userid in known['config']:
+        if ARG.QUICK and userid in known['config']:
             continue
         LOGGER.debug(user)
-        if not rebuild:
+        if not ARG.REBUILD:
             post_change(user, userid)
-    LOGGER.info("Found %d active entries", len(ddict))
-    if rebuild:
-        LOGGER.info("workday config will contain %d Janelia entries", len(ddict))
+    LOGGER.info(f"Found {len(ddict):,} active entries")
+    if ARG.BACKCHECK:
+        for key, val in tqdm(known['config'].items()):
+            if key not in in_workday and 'active' in val and val['active'] == 'Y':
+                LOGGER.warning(f"{key} is in config but not in Workday")
+                val['active'] = 'N'
+                post_change(val, key)
+    if ARG.REBUILD:
+        LOGGER.info(f"Workday config will contain {len(ddict):,} Janelia entries")
         post_change(ddict)
 
 
@@ -108,6 +125,8 @@ if __name__ == '__main__':
         description='Update Workday user Configuration')
     PARSER.add_argument('--quick', action='store_true', dest='QUICK',
                         default=False, help='Only process new entries')
+    PARSER.add_argument('--backcheck', action='store_true', dest='BACKCHECK',
+                        default=False, help='Backcheck to Workday')
     PARSER.add_argument('--rebuild', action='store_true', dest='REBUILD',
                         default=False, help='Rebuild config from scratch')
     PARSER.add_argument('--verbose', action='store_true', dest='VERBOSE',
@@ -129,7 +148,7 @@ if __name__ == '__main__':
     LOGGER.addHandler(HANDLER)
 
     initialize_program()
-    update_users(ARG.QUICK, ARG.REBUILD)
-    print("Documents inserted in config database: %d" % count['insert'])
-    print("Documents updated in config database: %d" % count['update'])
+    update_users()
+    print(f"Documents inserted in config database: {count['insert']:,}")
+    print(f"Documents updated in config database: {count['update']:,}")
 
